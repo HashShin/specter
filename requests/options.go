@@ -3,7 +3,7 @@ package requests
 import (
 	"time"
 
-	"specter/impersonate"
+	"github.com/HashShin/specter/impersonate"
 )
 
 // Options configures a single HTTP request.

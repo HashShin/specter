@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"specter/impersonate"
+	"github.com/HashShin/specter/impersonate"
 
 	utls "github.com/refraction-networking/utls"
 	"golang.org/x/net/publicsuffix"

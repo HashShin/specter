@@ -10,7 +10,7 @@ import (
 	"os"
 	"time"
 
-	"specter/impersonate"
+	"github.com/HashShin/specter/impersonate"
 
 	fhttp "github.com/bogdanfinn/fhttp"
 	fhttp2 "github.com/bogdanfinn/fhttp/http2"

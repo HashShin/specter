@@ -1,4 +1,4 @@
-module specter
+module github.com/HashShin/specter
 
 go 1.25.0
 

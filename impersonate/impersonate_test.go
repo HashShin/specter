@@ -3,7 +3,7 @@ package impersonate_test
 import (
 	"testing"
 
-	"specter/impersonate"
+	"github.com/HashShin/specter/impersonate"
 )
 
 // TestNormalize verifies that browser aliases resolve to their canonical targets.

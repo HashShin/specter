@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"specter/impersonate"
-	"specter/requests"
+	"github.com/HashShin/specter/impersonate"
+	"github.com/HashShin/specter/requests"
 )
 
 func main() {

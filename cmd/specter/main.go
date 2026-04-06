@@ -22,8 +22,8 @@ import (
 	"strings"
 	"time"
 
-	"specter/impersonate"
-	"specter/requests"
+	"github.com/HashShin/specter/impersonate"
+	"github.com/HashShin/specter/requests"
 )
 
 const usage = `specter - HTTP client with browser TLS fingerprinting
