@@ -1,0 +1,4 @@
+specter
+curl-cffi
+*.exe
+*.test
