@@ -9,8 +9,13 @@ No CGO. No C dependencies. Works on Linux, macOS, Windows, Android.
 ## Install
 
 ```bash
-go get github.com/HashShin/specter
+go get github.com/HashShin/specter@latest
 ```
+
+> If you get a network timeout on `proxy.golang.org`, use direct mode:
+> ```bash
+> GOPROXY=direct go get github.com/HashShin/specter@latest
+> ```
 
 ---
 
