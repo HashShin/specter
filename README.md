@@ -21,7 +21,7 @@ go get github.com/HashShin/specter@latest
 
 ## Usage
 
-### Simple request
+### Request style (recommended)
 
 ```go
 package main
@@ -34,15 +34,62 @@ import (
 )
 
 func main() {
-    resp, err := requests.Get("https://httpbin.org/get", requests.Options{
+    sess, _ := requests.NewSession()
+    defer sess.Close()
+
+    resp, err := sess.Send(requests.Request{
+        Method: "GET",
+        URL:    "https://httpbin.org/get",
+        Headers: requests.Headers{
+            "Accept: application/json",
+            "X-Custom: value",
+        },
         Impersonate: impersonate.Chrome146,
     })
     if err != nil {
         panic(err)
     }
-    fmt.Println(resp.StatusCode) // 200
+    fmt.Println(resp.StatusCode)
     fmt.Println(resp.Text())
 }
+```
+
+### One-shot (no session)
+
+```go
+resp, err := requests.Send(requests.Request{
+    Method:      "GET",
+    URL:         "https://httpbin.org/get",
+    Impersonate: impersonate.Chrome146,
+})
+```
+
+### POST with JSON
+
+```go
+resp, _ := sess.Send(requests.Request{
+    Method: "POST",
+    URL:    "https://httpbin.org/post",
+    Headers: requests.Headers{
+        "Content-Type: application/json",
+    },
+    JSON:        map[string]any{"name": "Alice", "age": 30},
+    Impersonate: impersonate.Chrome146,
+})
+```
+
+### POST form data
+
+```go
+resp, _ := sess.Send(requests.Request{
+    Method: "POST",
+    URL:    "https://example.com/login",
+    Form: map[string]string{
+        "username": "alice",
+        "password": "hunter2",
+    },
+    Impersonate: impersonate.Firefox147,
+})
 ```
 
 ### Session (persists cookies across requests)
@@ -51,110 +98,87 @@ func main() {
 sess, _ := requests.NewSession()
 defer sess.Close()
 
-sess.Impersonate = impersonate.Firefox147
+sess.Impersonate = impersonate.Chrome146
 
-// Login
-sess.Post("https://example.com/login", requests.Options{
-    Form: map[string]string{
-        "username": "alice",
-        "password": "hunter2",
-    },
+// Login — cookies saved automatically
+sess.Send(requests.Request{
+    Method: "POST",
+    URL:    "https://example.com/login",
+    Form:   map[string]string{"username": "alice", "password": "hunter2"},
 })
 
-// Follow-up request uses the same cookies
-resp, _ := sess.Get("https://example.com/dashboard")
+// Next request sends cookies automatically
+resp, _ := sess.Send(requests.Request{
+    Method: "GET",
+    URL:    "https://example.com/dashboard",
+})
 fmt.Println(resp.Text())
-```
-
-### POST with JSON
-
-```go
-resp, err := requests.Post("https://httpbin.org/post", requests.Options{
-    Impersonate: impersonate.Chrome146,
-    JSON: map[string]any{
-        "name": "Alice",
-        "age":  30,
-    },
-})
-```
-
-### Custom headers
-
-```go
-resp, _ := requests.Get("https://httpbin.org/headers", requests.Options{
-    Impersonate: impersonate.Safari2601,
-    Headers: map[string]string{
-        "X-API-Key":    "secret",
-        "Accept":       "application/json",
-    },
-})
 ```
 
 ### Proxy
 
 ```go
-resp, _ := requests.Get("https://httpbin.org/ip", requests.Options{
-    Impersonate: impersonate.Chrome146,
+resp, _ := sess.Send(requests.Request{
+    Method:      "GET",
+    URL:         "https://httpbin.org/ip",
     Proxy:       "socks5://127.0.0.1:1080",
-    // Proxy:    "http://127.0.0.1:8080",
-})
-```
-
-### Skip TLS verification / custom CA
-
-```go
-// Skip verification
-resp, _ := requests.Get("https://self-signed.example.com", requests.Options{
-    Verify: false,
-})
-
-// Custom CA bundle
-resp, _ = requests.Get("https://internal.example.com", requests.Options{
-    Verify: "/path/to/ca-bundle.pem",
-})
-```
-
-### Timeout
-
-```go
-resp, err := requests.Get("https://example.com", requests.Options{
     Impersonate: impersonate.Chrome146,
-    Timeout:     10 * time.Second,
 })
 ```
 
-### Retry with backoff
+### Timeout + retry
 
 ```go
-resp, err := requests.Get("https://flaky.example.com", requests.Options{
+resp, _ := sess.Send(requests.Request{
+    Method:      "GET",
+    URL:         "https://flaky.example.com",
+    Timeout:     10 * time.Second,
     Impersonate: impersonate.Chrome146,
     Retry: &requests.RetryStrategy{
         Count:   3,
         Delay:   time.Second,
-        Backoff: "exponential", // or "linear"
+        Backoff: "exponential",
     },
+})
+```
+
+### Skip TLS / custom CA
+
+```go
+// Skip verification
+resp, _ := sess.Send(requests.Request{
+    Method: "GET",
+    URL:    "https://self-signed.example.com",
+    Verify: false,
+})
+
+// Custom CA bundle
+resp, _ = sess.Send(requests.Request{
+    Method: "GET",
+    URL:    "https://internal.example.com",
+    Verify: "/path/to/ca-bundle.pem",
 })
 ```
 
 ### Streaming response
 
 ```go
-resp, err := requests.Get("https://example.com/large-file", requests.Options{
+resp, _ := sess.Send(requests.Request{
+    Method: "GET",
+    URL:    "https://example.com/large-file",
     Stream: true,
 })
-if err != nil {
-    panic(err)
-}
 defer resp.BodyStream.Close()
-
 io.Copy(os.Stdout, resp.BodyStream)
 ```
 
 ### Custom JA3 fingerprint
 
 ```go
-resp, _ := requests.Get("https://tls.peet.ws/api/all", requests.Options{
-    JA3: "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0",
+resp, _ := sess.Send(requests.Request{
+    Method: "GET",
+    URL:    "https://tls.peet.ws/api/all",
+    JA3:    "771,4865-4866-4867-49195-49199-49196-49200-52393-52392-49171-49172-156-157-47-53,0-23-65281-10-11-35-16-5-13-18-51-45-43-27-17513-21,29-23-24,0",
 })
 ```
 
