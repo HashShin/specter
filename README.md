@@ -39,7 +39,7 @@ func main() {
 
     resp, err := sess.Send(requests.Request{
         Method: "GET",
-        URL:    "https://httpbin.org/get",
+        URL:    "https://httpbun.com/get",
         Headers: requests.Headers{
             "Accept: application/json",
             "X-Custom: value",
@@ -59,7 +59,7 @@ func main() {
 ```go
 resp, err := requests.Send(requests.Request{
     Method:      "GET",
-    URL:         "https://httpbin.org/get",
+    URL:         "https://httpbun.com/get",
     Impersonate: impersonate.Chrome146,
 })
 ```
@@ -69,7 +69,7 @@ resp, err := requests.Send(requests.Request{
 ```go
 resp, _ := sess.Send(requests.Request{
     Method: "POST",
-    URL:    "https://httpbin.org/post",
+    URL:    "https://httpbun.com/post",
     Headers: requests.Headers{
         "Content-Type: application/json",
     },
@@ -121,7 +121,7 @@ fmt.Println(resp.Text())
 ```go
 resp, _ := sess.Send(requests.Request{
     Method:      "GET",
-    URL:         "https://httpbin.org/ip",
+    URL:         "https://httpbun.com/ip",
     Proxy:       "socks5://127.0.0.1:1080",
     Impersonate: impersonate.Chrome146,
 })
@@ -209,10 +209,10 @@ go install github.com/HashShin/specter/cmd/specter@latest
 
 ```bash
 # GET with Chrome fingerprint
-specter https://httpbin.org/get --impersonate chrome
+specter https://httpbun.com/get --impersonate chrome
 
 # POST JSON
-specter post --json '{"key":"value"}' https://httpbin.org/post
+specter post --json '{"key":"value"}' https://httpbun.com/post
 
 # Custom header + proxy
 specter -H "X-API-Key: secret" --proxy socks5://127.0.0.1:1080 https://example.com

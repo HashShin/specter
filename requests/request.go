@@ -31,7 +31,7 @@ func (h Headers) toMap() map[string]string {
 //
 //	req := requests.Request{
 //	    Method: "GET",
-//	    URL:    "https://httpbin.org/get",
+//	    URL:    "https://httpbun.com/get",
 //	    Headers: requests.Headers{
 //	        "Accept: application/json",
 //	        "X-Custom: value",
@@ -102,11 +102,11 @@ func (r Request) toOptions() Options {
 //
 //	resp, err := sess.Send(requests.Request{
 //	    Method: "POST",
-//	    URL:    "https://httpbin.org/post",
+//	    URL:    "https://httpbun.com/post",
 //	    Headers: requests.Headers{
 //	        "Content-Type: application/json",
 //	    },
-//	    JSON: map[string]any{"key": "value"},
+//	    Body:    `{"key": "value"}`,
 //	    Impersonate: impersonate.Chrome146,
 //	})
 func (s *Session) Send(req Request) (*Response, error) {

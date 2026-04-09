@@ -12,7 +12,7 @@ import (
 func main() {
 	// --- Example 1: one-shot GET with Chrome 146 TLS fingerprint ---
 	fmt.Println("=== Example 1: GET with Chrome 146 impersonation ===")
-	resp, err := requests.Get("https://httpbin.org/get", requests.Options{
+	resp, err := requests.Get("https://httpbun.com/get", requests.Options{
 		Impersonate: impersonate.Chrome146,
 	})
 	if err != nil {
@@ -33,7 +33,7 @@ func main() {
 
 	s.Impersonate = impersonate.Chrome146
 
-	resp, err = s.Post("https://httpbin.org/post", requests.Options{
+	resp, err = s.Post("https://httpbun.com/post", requests.Options{
 		Body:        []byte(`{"hello": "world", "n": 42}`),
 		ContentType: "application/json",
 	})
@@ -45,7 +45,7 @@ func main() {
 
 	// --- Example 3: Firefox fingerprint ---
 	fmt.Println("=== Example 3: Firefox 147 fingerprint ===")
-	resp, err = requests.Get("https://httpbin.org/headers", requests.Options{
+	resp, err = requests.Get("https://httpbun.com/headers", requests.Options{
 		Impersonate: impersonate.Firefox147,
 		Headers: map[string]string{
 			"X-Custom": "curl_cffi_go",
@@ -59,7 +59,7 @@ func main() {
 
 	// --- Example 4: Safari fingerprint ---
 	fmt.Println("=== Example 4: Safari 26 fingerprint ===")
-	resp, err = requests.Get("https://httpbin.org/get", requests.Options{
+	resp, err = requests.Get("https://httpbun.com/get", requests.Options{
 		Impersonate: impersonate.Safari2601,
 	})
 	if err != nil {
@@ -70,7 +70,7 @@ func main() {
 
 	// --- Example 5: Skip SSL verification ---
 	fmt.Println("=== Example 5: Skip SSL verification ===")
-	resp, err = requests.Get("https://httpbin.org/get", requests.Options{
+	resp, err = requests.Get("https://httpbun.com/get", requests.Options{
 		Verify: false,
 	})
 	if err != nil {
