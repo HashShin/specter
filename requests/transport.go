@@ -63,6 +63,7 @@ func buildStandardTransport(opts *transportOpts) http.RoundTripper {
 	}
 	t := &http.Transport{
 		TLSClientConfig:     tlsCfg,
+		TLSNextProto:        map[string]func(string, *tls.Conn) http.RoundTripper{}, // disable h2
 		DisableCompression:  false,
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
@@ -195,6 +196,7 @@ func (b *fhttpBridge) roundTripH1Fallback(req *http.Request) (*http.Response, er
 	}
 	t := &http.Transport{
 		TLSClientConfig: tlsCfg,
+		TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{}, // disable h2
 		MaxIdleConns:    100,
 		IdleConnTimeout: 90 * time.Second,
 	}
