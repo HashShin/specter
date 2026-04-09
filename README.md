@@ -54,6 +54,37 @@ func main() {
 }
 ```
 
+### Shorter syntax with dot import
+
+To drop the `requests.` prefix and write `Request{` / `Headers{}` directly, use a dot import:
+
+```go
+import (
+    . "github.com/HashShin/specter/requests"
+    "github.com/HashShin/specter/impersonate"
+)
+
+func main() {
+    sess, _ := NewSession()
+    defer sess.Close()
+
+    resp, err := sess.Send(Request{
+        Method:      "GET",
+        URL:         "https://httpbun.com/get",
+        Headers:     Headers{"Accept: application/json"},
+        Impersonate: impersonate.Chrome146,
+    })
+    // ...
+}
+```
+
+Or alias only the types you need:
+
+```go
+type Request = requests.Request
+type Headers = requests.Headers
+```
+
 ### One-shot (no session)
 
 ```go
