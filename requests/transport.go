@@ -50,9 +50,12 @@ func buildTransport(profile *impersonate.Profile, opts *transportOpts) http.Roun
 }
 
 // buildStandardTransport returns a plain net/http transport with standard Go TLS.
-// It handles HTTP/1.1 and HTTP/2 via ALPN automatically — no browser fingerprinting.
+// Forces HTTP/1.1 via ALPN — no browser fingerprinting.
 func buildStandardTransport(opts *transportOpts) http.RoundTripper {
-	tlsCfg := &tls.Config{InsecureSkipVerify: opts.skipVerify}
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: opts.skipVerify,
+		NextProtos:         []string{"http/1.1"},
+	}
 	if opts.caFile != "" && !opts.skipVerify {
 		if pool, err := loadCACerts(opts.caFile); err == nil {
 			tlsCfg.RootCAs = pool
@@ -163,18 +166,42 @@ func (b *fhttpBridge) RoundTrip(req *http.Request) (*http.Response, error) {
 
 // roundTripH2 uses fhttp2.Transport.NewClientConn to establish an HTTP/2 connection
 // on the pre-dialed utls conn, preserving the configured H2 SETTINGS fingerprint.
+// Falls back to HTTP/1.1 with a fresh connection if h2 fails.
 func (b *fhttpBridge) roundTripH2(req *http.Request, conn net.Conn) (*http.Response, error) {
 	cc, err := b.t2.NewClientConn(conn)
 	if err != nil {
 		conn.Close()
-		return nil, fmt.Errorf("h2 client conn: %w", err)
+		return b.roundTripH1Fallback(req)
 	}
 	freq := toFHTTPRequest(req)
 	fresp, err := cc.RoundTrip(freq)
 	if err != nil {
-		return nil, err
+		return b.roundTripH1Fallback(req)
 	}
 	return fromFHTTPResponse(fresp, req), nil
+}
+
+// roundTripH1Fallback makes a fresh HTTP/1.1-only connection when h2 fails.
+// Uses standard Go TLS (no browser fingerprint) with h1-only ALPN.
+func (b *fhttpBridge) roundTripH1Fallback(req *http.Request) (*http.Response, error) {
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: b.dialer.skipVerify,
+		NextProtos:         []string{"http/1.1"},
+	}
+	if b.dialer.caFile != "" && !b.dialer.skipVerify {
+		if pool, err := loadCACerts(b.dialer.caFile); err == nil {
+			tlsCfg.RootCAs = pool
+		}
+	}
+	t := &http.Transport{
+		TLSClientConfig: tlsCfg,
+		MaxIdleConns:    100,
+		IdleConnTimeout: 90 * time.Second,
+	}
+	if b.dialer.proxyURL != nil {
+		t.Proxy = http.ProxyURL(b.dialer.proxyURL)
+	}
+	return t.RoundTrip(req)
 }
 
 // roundTripH1 sends an HTTP/1.1 request over the pre-dialed utls connection.
