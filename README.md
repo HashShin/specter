@@ -68,12 +68,9 @@ resp, err := requests.Send(requests.Request{
 
 ```go
 resp, _ := sess.Send(requests.Request{
-    Method: "POST",
-    URL:    "https://httpbin.org/post",
-    Headers: requests.Headers{
-        "Content-Type: application/json",
-    },
-    JSON:        map[string]any{"name": "Alice", "age": 30},
+    Method:      "POST",
+    URL:         "https://httpbin.org/post",
+    JSON:        `{"name": "Alice", "age": 30}`,
     Impersonate: impersonate.Chrome146,
 })
 ```
@@ -82,12 +79,9 @@ resp, _ := sess.Send(requests.Request{
 
 ```go
 resp, _ := sess.Send(requests.Request{
-    Method: "POST",
-    URL:    "https://example.com/login",
-    Form: map[string]string{
-        "username": "alice",
-        "password": "hunter2",
-    },
+    Method:      "POST",
+    URL:         "https://example.com/login",
+    Form:        "username=alice&password=hunter2",
     Impersonate: impersonate.Firefox147,
 })
 ```
@@ -104,7 +98,7 @@ sess.Impersonate = impersonate.Chrome146
 sess.Send(requests.Request{
     Method: "POST",
     URL:    "https://example.com/login",
-    Form:   map[string]string{"username": "alice", "password": "hunter2"},
+    Form:   "username=alice&password=hunter2",
 })
 
 // Next request sends cookies automatically
