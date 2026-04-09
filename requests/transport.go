@@ -2,12 +2,14 @@ package requests
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/HashShin/specter/impersonate"
@@ -24,15 +26,18 @@ type transportOpts struct {
 	caFile      string
 	proxyURL    *url.URL
 	dialTimeout time.Duration
-	// ja3Spec is set when a custom JA3 fingerprint overrides the profile HelloID.
-	ja3Spec *utls.ClientHelloSpec
+	ja3Spec     *utls.ClientHelloSpec
 }
 
-// buildTransport creates an http.RoundTripper that:
-// - Uses refraction-networking/utls for TLS (browser fingerprint via HelloID or custom JA3)
-// - Uses bogdanfinn/fhttp http2.Transport for HTTP/2 with full H2 SETTINGS fingerprinting
-// - Falls back to HTTP/1.1 for plain HTTP
+// buildTransport creates an http.RoundTripper.
+// Without a browser profile or custom JA3, it returns a standard Go transport that
+// handles HTTP/1.1 and HTTP/2 via ALPN automatically.
+// With a profile, it returns an fhttpBridge that uses utls for TLS fingerprinting and
+// routes to HTTP/2 or HTTP/1.1 based on the ALPN-negotiated protocol.
 func buildTransport(profile *impersonate.Profile, opts *transportOpts) http.RoundTripper {
+	if profile == nil && opts.ja3Spec == nil {
+		return buildStandardTransport(opts)
+	}
 	dialer := &browserDialer{
 		profile:     profile,
 		skipVerify:  opts.skipVerify,
@@ -41,34 +46,56 @@ func buildTransport(profile *impersonate.Profile, opts *transportOpts) http.Roun
 		dialTimeout: opts.dialTimeout,
 		ja3Spec:     opts.ja3Spec,
 	}
-
-	if profile != nil || opts.ja3Spec != nil {
-		return buildFHTTPBridge(dialer, profile)
-	}
-	return buildH1Transport(dialer)
+	return buildFHTTPBridge(dialer, profile)
 }
 
-// buildFHTTPBridge creates an http.RoundTripper that uses bogdanfinn/fhttp for HTTP/2
-// with full H2 SETTINGS fingerprinting (INITIAL_WINDOW_SIZE, MAX_FRAME_SIZE, ENABLE_PUSH,
-// pseudo-header order) while using refraction-networking/utls for TLS dialing.
+// buildStandardTransport returns a plain net/http transport with standard Go TLS.
+// It handles HTTP/1.1 and HTTP/2 via ALPN automatically — no browser fingerprinting.
+func buildStandardTransport(opts *transportOpts) http.RoundTripper {
+	tlsCfg := &tls.Config{InsecureSkipVerify: opts.skipVerify}
+	if opts.caFile != "" && !opts.skipVerify {
+		if pool, err := loadCACerts(opts.caFile); err == nil {
+			tlsCfg.RootCAs = pool
+		}
+	}
+	t := &http.Transport{
+		TLSClientConfig:     tlsCfg,
+		DisableCompression:  false,
+		MaxIdleConns:        100,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+	if opts.proxyURL != nil {
+		t.Proxy = http.ProxyURL(opts.proxyURL)
+	}
+	return t
+}
+
+// negotiatedConn wraps a utls connection and exposes the ALPN-negotiated protocol.
+type negotiatedConn struct {
+	net.Conn
+	proto string // "h2", "http/1.1", or "" (no ALPN)
+}
+
+// fhttpBridge routes HTTPS requests to HTTP/2 (fhttp2 with H2 fingerprinting) or
+// HTTP/1.1 based on the ALPN protocol negotiated by the utls TLS handshake.
+type fhttpBridge struct {
+	t2     *fhttp2.Transport // configured with browser H2 SETTINGS
+	dialer *browserDialer
+}
+
+// buildFHTTPBridge creates an fhttpBridge with browser H2 settings applied.
 func buildFHTTPBridge(dialer *browserDialer, profile *impersonate.Profile) http.RoundTripper {
-	// Build the fhttp/http2 transport with our custom TLS dialer and H2 settings.
+	// t2 is used only for NewClientConn (its DialTLS is never called directly).
 	t2 := &fhttp2.Transport{
-		// DialTLS injects our refraction-networking/utls dialer.
-		// We ignore the bogdanfinn/utls config (cfg) since we manage TLS ourselves.
 		DialTLS: func(network, addr string, _ *butls.Config) (net.Conn, error) {
 			return dialer.dial(context.Background(), network, addr)
 		},
 	}
-
 	if profile != nil {
 		applyH2Settings(t2, profile)
 	}
-
-	return &fhttpBridge{
-		h2:     t2,
-		dialer: dialer,
-	}
+	return &fhttpBridge{t2: t2, dialer: dialer}
 }
 
 // applyH2Settings applies a browser profile's H2 fingerprint to an fhttp2.Transport.
@@ -80,10 +107,8 @@ func applyH2Settings(t2 *fhttp2.Transport, profile *impersonate.Profile) {
 		id := fhttp2.SettingID(s.ID)
 		switch id {
 		case fhttp2.SettingHeaderTableSize:
-			// Must be set directly on the transport, not in the Settings map
 			t2.HeaderTableSize = s.Val
 		case fhttp2.SettingInitialWindowSize:
-			// Must be set directly on the transport, not in the Settings map
 			t2.InitialWindowSize = s.Val
 		default:
 			settings[id] = s.Val
@@ -96,64 +121,82 @@ func applyH2Settings(t2 *fhttp2.Transport, profile *impersonate.Profile) {
 		t2.SettingsOrder = settingsOrder
 	}
 
-	// Connection-level WINDOW_UPDATE increment (Akamai fingerprint)
 	if profile.H2WindowUpdate > 0 {
 		t2.ConnectionFlow = profile.H2WindowUpdate
 	}
 
-	// Pseudo-header order (:method, :authority, :scheme, :path ordering)
 	if len(profile.H2PseudoHeaders) > 0 {
 		ph := make([]string, len(profile.H2PseudoHeaders))
 		for i, h := range profile.H2PseudoHeaders {
-			ph[i] = ":" + h // "method" → ":method"
+			ph[i] = ":" + h
 		}
 		t2.PseudoHeaderOrder = ph
 	}
 }
 
-// buildH1Transport creates an http.Transport backed by our utls dialer (no H2).
-func buildH1Transport(dialer *browserDialer) http.RoundTripper {
-	return &http.Transport{
-		DialTLSContext:      dialer.DialTLSH1,
-		DisableCompression:  false,
-		MaxIdleConns:        100,
-		IdleConnTimeout:     90 * time.Second,
-		TLSHandshakeTimeout: 10 * time.Second,
-	}
-}
-
-// fhttpBridge wraps bogdanfinn/fhttp's http2.Transport and implements net/http.RoundTripper.
-// It converts between net/http and fhttp request/response types, allowing the rest of the
-// codebase to use the standard net/http.Client while gaining full H2 fingerprinting.
-type fhttpBridge struct {
-	h2     *fhttp2.Transport
-	dialer *browserDialer
-}
-
 // RoundTrip satisfies net/http.RoundTripper.
+// For HTTPS: pre-dials with utls, checks ALPN, routes to H2 or H1.
+// For HTTP: uses a plain TCP transport.
 func (b *fhttpBridge) RoundTrip(req *http.Request) (*http.Response, error) {
-	if req.URL.Scheme == "https" {
-		// Use the fhttp h2 transport for HTTPS (handles H1 fallback via ALPN)
-		freq := toFHTTPRequest(req)
-		fresp, err := b.h2.RoundTrip(freq)
-		if err != nil {
-			return nil, err
-		}
-		return fromFHTTPResponse(fresp, req), nil
+	if req.URL.Scheme != "https" {
+		plain := &http.Transport{DialContext: b.dialer.DialTCP}
+		return plain.RoundTrip(req)
 	}
 
-	// Plain HTTP: use a standard TCP transport
-	plain := &http.Transport{
-		DialContext:        b.dialer.DialTCP,
-		DisableCompression: false,
-		MaxIdleConns:       100,
-		IdleConnTimeout:    90 * time.Second,
+	// Pre-dial to determine ALPN-negotiated protocol.
+	host := req.URL.Hostname()
+	port := req.URL.Port()
+	if port == "" {
+		port = "443"
 	}
-	return plain.RoundTrip(req)
+	conn, err := b.dialer.dial(req.Context(), "tcp", net.JoinHostPort(host, port))
+	if err != nil {
+		return nil, err
+	}
+	nc := conn.(*negotiatedConn)
+
+	if nc.proto == "h2" {
+		return b.roundTripH2(req, nc.Conn)
+	}
+	return b.roundTripH1(req, nc.Conn)
+}
+
+// roundTripH2 uses fhttp2.Transport.NewClientConn to establish an HTTP/2 connection
+// on the pre-dialed utls conn, preserving the configured H2 SETTINGS fingerprint.
+func (b *fhttpBridge) roundTripH2(req *http.Request, conn net.Conn) (*http.Response, error) {
+	cc, err := b.t2.NewClientConn(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("h2 client conn: %w", err)
+	}
+	freq := toFHTTPRequest(req)
+	fresp, err := cc.RoundTrip(freq)
+	if err != nil {
+		return nil, err
+	}
+	return fromFHTTPResponse(fresp, req), nil
+}
+
+// roundTripH1 sends an HTTP/1.1 request over the pre-dialed utls connection.
+func (b *fhttpBridge) roundTripH1(req *http.Request, conn net.Conn) (*http.Response, error) {
+	var used int32
+	t := &http.Transport{
+		DialTLSContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+			if atomic.CompareAndSwapInt32(&used, 0, 1) {
+				return conn, nil
+			}
+			return nil, fmt.Errorf("connection already used")
+		},
+		DisableKeepAlives: true,
+	}
+	resp, err := t.RoundTrip(req)
+	if err != nil {
+		conn.Close()
+	}
+	return resp, err
 }
 
 // toFHTTPRequest converts a *net/http.Request to *fhttp.Request.
-// The two types are structurally identical; only the named types differ.
 func toFHTTPRequest(req *http.Request) *fhttp.Request {
 	freq := &fhttp.Request{
 		Method:           req.Method,
@@ -208,8 +251,7 @@ func fromFHTTPResponse(fresp *fhttp.Response, origReq *http.Request) *http.Respo
 	return resp
 }
 
-// browserDialer dials TCP connections and wraps them with utls for TLS,
-// producing a browser-like TLS ClientHello.
+// browserDialer dials TCP connections and wraps them with utls for TLS fingerprinting.
 type browserDialer struct {
 	profile     *impersonate.Profile
 	skipVerify  bool
@@ -221,7 +263,11 @@ type browserDialer struct {
 
 // DialTLSH1 satisfies http.Transport.DialTLSContext (for H1 fallback).
 func (d *browserDialer) DialTLSH1(ctx context.Context, network, addr string) (net.Conn, error) {
-	return d.dial(ctx, network, addr)
+	conn, err := d.dial(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	return conn.(*negotiatedConn).Conn, nil
 }
 
 // DialTCP is used for plain HTTP (non-TLS) connections.
@@ -229,6 +275,8 @@ func (d *browserDialer) DialTCP(ctx context.Context, network, addr string) (net.
 	return (&net.Dialer{Timeout: d.timeout()}).DialContext(ctx, network, addr)
 }
 
+// dial establishes a TLS connection using utls and returns a negotiatedConn
+// that exposes the ALPN-negotiated protocol ("h2", "http/1.1", or "").
 func (d *browserDialer) dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	serverName, _, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -250,7 +298,6 @@ func (d *browserDialer) dial(ctx context.Context, network, addr string) (net.Con
 		InsecureSkipVerify: d.skipVerify,
 	}
 
-	// Load custom CA bundle if specified
 	if d.caFile != "" && !d.skipVerify {
 		pool, err := loadCACerts(d.caFile)
 		if err != nil {
@@ -260,7 +307,6 @@ func (d *browserDialer) dial(ctx context.Context, network, addr string) (net.Con
 		tlsCfg.RootCAs = pool
 	}
 
-	// Determine TLS HelloID
 	helloID := utls.HelloChrome_Auto
 	if d.profile != nil {
 		helloID = d.profile.HelloID
@@ -268,7 +314,6 @@ func (d *browserDialer) dial(ctx context.Context, network, addr string) (net.Con
 
 	uconn := utls.UClient(rawConn, tlsCfg, helloID)
 
-	// Apply custom JA3 spec if provided (overrides the HelloID preset)
 	if d.ja3Spec != nil {
 		if err := uconn.ApplyPreset(d.ja3Spec); err != nil {
 			rawConn.Close()
@@ -280,7 +325,9 @@ func (d *browserDialer) dial(ctx context.Context, network, addr string) (net.Con
 		rawConn.Close()
 		return nil, fmt.Errorf("TLS handshake with %s: %w", serverName, err)
 	}
-	return uconn, nil
+
+	proto := uconn.ConnectionState().NegotiatedProtocol
+	return &negotiatedConn{Conn: uconn, proto: proto}, nil
 }
 
 func (d *browserDialer) dialThroughProxy(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -326,4 +373,3 @@ func loadCACerts(path string) (*x509.CertPool, error) {
 type contextDialer interface {
 	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
 }
-
