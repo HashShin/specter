@@ -31,13 +31,15 @@ type Options struct {
 	// Body is the raw request body (takes precedence over JSON and Form).
 	Body []byte
 
-	// JSON is marshalled to JSON and sent as the request body.
+	// JSON is a raw JSON string sent as the request body.
 	// Automatically sets Content-Type: application/json.
-	JSON interface{}
+	// Example: `{"key": "value"}`
+	JSON string
 
-	// Form is URL-encoded and sent as the request body.
+	// Form is a URL-encoded string sent as the request body.
 	// Automatically sets Content-Type: application/x-www-form-urlencoded.
-	Form map[string]string
+	// Example: "key=value&foo=bar"
+	Form string
 
 	// Cookies are per-request cookies (session cookies from the jar are also sent).
 	Cookies map[string]string

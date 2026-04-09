@@ -18,6 +18,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -199,22 +200,22 @@ func main() {
 	if rawData != "" {
 		opt.Body = []byte(rawData)
 	} else if jsonData != "" {
-		var v interface{}
-		if err := json.Unmarshal([]byte(jsonData), &v); err != nil {
-			fmt.Fprintf(os.Stderr, "error: invalid JSON: %v\n", err)
+		if !json.Valid([]byte(jsonData)) {
+			fmt.Fprintf(os.Stderr, "error: invalid JSON\n")
 			os.Exit(1)
 		}
-		opt.JSON = v
+		opt.JSON = jsonData
 	} else if len(formFields) > 0 {
-		opt.Form = make(map[string]string, len(formFields))
+		vals := url.Values{}
 		for _, f := range formFields {
 			k, v, ok := strings.Cut(f, "=")
 			if !ok {
 				fmt.Fprintf(os.Stderr, "error: invalid form field %q (must be key=value)\n", f)
 				os.Exit(1)
 			}
-			opt.Form[k] = v
+			vals.Set(k, v)
 		}
+		opt.Form = vals.Encode()
 		if method == "GET" {
 			method = "POST"
 		}

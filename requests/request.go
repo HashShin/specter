@@ -55,8 +55,8 @@ type Request struct {
 
 	// Body — use one at a time.
 	Body string
-	JSON interface{} // marshalled to JSON
-	Form map[string]string
+	JSON string // raw JSON string, e.g. `{"key": "value"}`
+	Form string // URL-encoded form string, e.g. "key=value&foo=bar"
 
 	// Auth & cookies
 	Auth    [2]string         // [username, password] for Basic Auth

@@ -4,7 +4,6 @@ package requests
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -538,19 +537,11 @@ func buildBody(opt *Options) ([]byte, string, error) {
 		}
 		return opt.Body, ct, nil
 	}
-	if opt.JSON != nil {
-		b, err := json.Marshal(opt.JSON)
-		if err != nil {
-			return nil, "", err
-		}
-		return b, "application/json", nil
+	if opt.JSON != "" {
+		return []byte(opt.JSON), "application/json", nil
 	}
-	if len(opt.Form) > 0 {
-		vals := url.Values{}
-		for k, v := range opt.Form {
-			vals.Set(k, v)
-		}
-		return []byte(vals.Encode()), "application/x-www-form-urlencoded", nil
+	if opt.Form != "" {
+		return []byte(opt.Form), "application/x-www-form-urlencoded", nil
 	}
 	return nil, "", nil
 }
