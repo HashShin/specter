@@ -42,9 +42,9 @@ type Response struct {
 	// Cookies are the response cookies parsed from Set-Cookie headers.
 	Cookies []*Cookie
 
-	// Body is the raw (decompressed) response body.
-	// Nil when Stream is true.
-	Body []byte
+	// Body is the response body as a string.
+	// Empty when Stream is true (use BodyStream instead).
+	Body string
 
 	// BodyStream is the open response body reader when Stream was true.
 	// The caller MUST close this when done.
@@ -57,14 +57,14 @@ type Response struct {
 	Elapsed time.Duration
 }
 
-// Text returns the response body as a UTF-8 string.
+// Text returns the response body as a string (same as Body).
 func (r *Response) Text() string {
-	return string(r.Body)
+	return r.Body
 }
 
-// JSON unmarshals the response body as JSON into v.
+// JSON unmarshals the response body into v.
 func (r *Response) JSON(v interface{}) error {
-	return json.Unmarshal(r.Body, v)
+	return json.Unmarshal([]byte(r.Body), v)
 }
 
 // RaiseForStatus returns an HTTPError if StatusCode >= 400, nil otherwise.

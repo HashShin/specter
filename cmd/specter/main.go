@@ -282,9 +282,8 @@ func main() {
 	}
 
 	if method != "HEAD" {
-		body := resp.Body
 		if outFile != "" {
-			if err := os.WriteFile(outFile, body, 0644); err != nil {
+			if err := os.WriteFile(outFile, []byte(resp.Body), 0644); err != nil {
 				fmt.Fprintf(os.Stderr, "error writing output: %v\n", err)
 				os.Exit(1)
 			}
@@ -292,7 +291,7 @@ func main() {
 				fmt.Fprintf(os.Stderr, "Written to %s\n", outFile)
 			}
 		} else {
-			os.Stdout.Write(body)
+			fmt.Print(resp.Body)
 		}
 	}
 

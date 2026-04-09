@@ -53,8 +53,8 @@ type Request struct {
 	// Query parameters appended to the URL
 	Params map[string]string
 
-	// Body — use one at a time
-	Body []byte      // raw bytes
+	// Body — use one at a time.
+	Body string
 	JSON interface{} // marshalled to JSON
 	Form map[string]string
 
@@ -81,7 +81,7 @@ func (r Request) toOptions() Options {
 		Impersonate:    r.Impersonate,
 		JA3:            r.JA3,
 		Params:         r.Params,
-		Body:           r.Body,
+		Body:           []byte(r.Body),
 		JSON:           r.JSON,
 		Form:           r.Form,
 		Auth:           r.Auth,

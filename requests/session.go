@@ -506,7 +506,7 @@ func buildResponse(r *http.Response, body []byte, requestURL string, elapsed tim
 		Proto:         r.Proto,
 		Headers:       r.Header,
 		Cookies:       cookies,
-		Body:          body,
+		Body:          string(body),
 		ContentLength: r.ContentLength,
 		Elapsed:       elapsed,
 	}
