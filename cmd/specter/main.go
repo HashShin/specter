@@ -204,7 +204,8 @@ func main() {
 			fmt.Fprintf(os.Stderr, "error: invalid JSON\n")
 			os.Exit(1)
 		}
-		opt.JSON = jsonData
+		opt.Body = []byte(jsonData)
+		opt.ContentType = "application/json"
 	} else if len(formFields) > 0 {
 		vals := url.Values{}
 		for _, f := range formFields {
@@ -215,7 +216,8 @@ func main() {
 			}
 			vals.Set(k, v)
 		}
-		opt.Form = vals.Encode()
+		opt.Body = []byte(vals.Encode())
+		opt.ContentType = "application/x-www-form-urlencoded"
 		if method == "GET" {
 			method = "POST"
 		}

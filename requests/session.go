@@ -531,17 +531,7 @@ func buildURL(rawURL string, params map[string]string) (string, error) {
 
 func buildBody(opt *Options) ([]byte, string, error) {
 	if len(opt.Body) > 0 {
-		ct := opt.ContentType
-		if ct == "" {
-			ct = "application/octet-stream"
-		}
-		return opt.Body, ct, nil
-	}
-	if opt.JSON != "" {
-		return []byte(opt.JSON), "application/json", nil
-	}
-	if opt.Form != "" {
-		return []byte(opt.Form), "application/x-www-form-urlencoded", nil
+		return opt.Body, opt.ContentType, nil
 	}
 	return nil, "", nil
 }

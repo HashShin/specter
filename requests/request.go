@@ -53,10 +53,9 @@ type Request struct {
 	// Query parameters appended to the URL
 	Params map[string]string
 
-	// Body — use one at a time.
+	// Body is the raw request body.
+	// Set Content-Type via Headers, e.g. "Content-Type: application/json".
 	Body string
-	JSON string // raw JSON string, e.g. `{"key": "value"}`
-	Form string // URL-encoded form string, e.g. "key=value&foo=bar"
 
 	// Auth & cookies
 	Auth    [2]string         // [username, password] for Basic Auth
@@ -82,8 +81,6 @@ func (r Request) toOptions() Options {
 		JA3:            r.JA3,
 		Params:         r.Params,
 		Body:           []byte(r.Body),
-		JSON:           r.JSON,
-		Form:           r.Form,
 		Auth:           r.Auth,
 		Cookies:        r.Cookies,
 		Proxy:          r.Proxy,

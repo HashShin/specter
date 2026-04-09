@@ -34,7 +34,8 @@ func main() {
 	s.Impersonate = impersonate.Chrome146
 
 	resp, err = s.Post("https://httpbin.org/post", requests.Options{
-		JSON: `{"hello": "world", "n": 42}`,
+		Body:        []byte(`{"hello": "world", "n": 42}`),
+		ContentType: "application/json",
 	})
 	if err != nil {
 		log.Fatalf("POST failed: %v", err)

@@ -78,7 +78,7 @@ func TestBuildBody(t *testing.T) {
 	})
 
 	t.Run("JSON body", func(t *testing.T) {
-		opt := &Options{JSON: map[string]string{"key": "value"}}
+		opt := &Options{Body: []byte(`{"key":"value"}`), ContentType: "application/json"}
 		body, ct, err := buildBody(opt)
 		if err != nil {
 			t.Fatalf("buildBody: %v", err)
@@ -92,7 +92,7 @@ func TestBuildBody(t *testing.T) {
 	})
 
 	t.Run("form body", func(t *testing.T) {
-		opt := &Options{Form: map[string]string{"foo": "bar", "baz": "qux"}}
+		opt := &Options{Body: []byte("foo=bar&baz=qux"), ContentType: "application/x-www-form-urlencoded"}
 		body, ct, err := buildBody(opt)
 		if err != nil {
 			t.Fatalf("buildBody: %v", err)

@@ -28,18 +28,9 @@ type Options struct {
 	// Headers are additional/override request headers.
 	Headers map[string]string
 
-	// Body is the raw request body (takes precedence over JSON and Form).
+	// Body is the raw request body.
+	// Set Content-Type via Headers or the ContentType field.
 	Body []byte
-
-	// JSON is a raw JSON string sent as the request body.
-	// Automatically sets Content-Type: application/json.
-	// Example: `{"key": "value"}`
-	JSON string
-
-	// Form is a URL-encoded string sent as the request body.
-	// Automatically sets Content-Type: application/x-www-form-urlencoded.
-	// Example: "key=value&foo=bar"
-	Form string
 
 	// Cookies are per-request cookies (session cookies from the jar are also sent).
 	Cookies map[string]string
