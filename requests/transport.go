@@ -183,22 +183,22 @@ func (b *fhttpBridge) roundTripH2(req *http.Request, conn net.Conn) (*http.Respo
 }
 
 // roundTripH1Fallback makes a fresh HTTP/1.1-only connection when h2 fails.
-// Uses standard Go TLS (no browser fingerprint) with h1-only ALPN.
+// Uses the browser dialer (utls) to preserve the TLS fingerprint.
 func (b *fhttpBridge) roundTripH1Fallback(req *http.Request) (*http.Response, error) {
-	tlsCfg := &tls.Config{
-		InsecureSkipVerify: b.dialer.skipVerify,
-		NextProtos:         []string{"http/1.1"},
-	}
-	if b.dialer.caFile != "" && !b.dialer.skipVerify {
-		if pool, err := loadCACerts(b.dialer.caFile); err == nil {
-			tlsCfg.RootCAs = pool
-		}
-	}
+	var used int32
 	t := &http.Transport{
-		TLSClientConfig: tlsCfg,
-		TLSNextProto:    map[string]func(string, *tls.Conn) http.RoundTripper{}, // disable h2
-		MaxIdleConns:    100,
-		IdleConnTimeout: 90 * time.Second,
+		DialTLSContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if atomic.CompareAndSwapInt32(&used, 0, 1) {
+				conn, err := b.dialer.dial(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+				return conn.(*negotiatedConn).Conn, nil
+			}
+			return nil, fmt.Errorf("connection already used")
+		},
+		TLSNextProto:      map[string]func(string, *tls.Conn) http.RoundTripper{}, // disable h2
+		DisableKeepAlives: true,
 	}
 	if b.dialer.proxyURL != nil {
 		t.Proxy = http.ProxyURL(b.dialer.proxyURL)
@@ -233,7 +233,7 @@ func toFHTTPRequest(req *http.Request) *fhttp.Request {
 		Proto:            req.Proto,
 		ProtoMajor:       req.ProtoMajor,
 		ProtoMinor:       req.ProtoMinor,
-		Header:           fhttp.Header(req.Header),
+		Header:           fhttp.Header(req.Header.Clone()),
 		Body:             req.Body,
 		GetBody:          req.GetBody,
 		ContentLength:    req.ContentLength,

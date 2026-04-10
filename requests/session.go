@@ -531,7 +531,11 @@ func buildURL(rawURL string, params map[string]string) (string, error) {
 
 func buildBody(opt *Options) ([]byte, string, error) {
 	if len(opt.Body) > 0 {
-		return opt.Body, opt.ContentType, nil
+		ct := opt.ContentType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		return opt.Body, ct, nil
 	}
 	return nil, "", nil
 }
